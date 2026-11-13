@@ -1,0 +1,912 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AES · 高级加密标准 — 原理与交互演示</title>
+<meta name="description" content="AES（Advanced Encryption Standard）算法原理介绍与交互式加密过程可视化演示">
+<style>
+  :root{
+    --bg: #f7f7fb;
+    --surface: #ffffff;
+    --surface-2: #f1f1f8;
+    --text: #15161a;
+    --text-muted: #686b76;
+    --border: #e6e6ef;
+    --accent: #5b5bf0;
+    --accent-2: #8b5cf6;
+    --accent-soft: #edeefd;
+    --accent-contrast: #ffffff;
+    --success: #16a34a;
+    --success-soft: #ecfdf3;
+    --warn-soft: #fff7ed;
+    --warn-text: #9a3412;
+    --radius-lg: 20px;
+    --radius-md: 14px;
+    --radius-sm: 8px;
+    --shadow-sm: 0 1px 2px rgba(20,20,40,.04);
+    --shadow-md: 0 8px 24px rgba(30,30,60,.08);
+    --shadow-lg: 0 20px 48px rgba(30,30,60,.12);
+    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", Helvetica, Arial, sans-serif;
+    --font-mono: "SF Mono", SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+    --maxw: 1140px;
+  }
+  [data-theme="dark"]{
+    --bg: #0d0e14;
+    --surface: #15161f;
+    --surface-2: #1b1c29;
+    --text: #eceef5;
+    --text-muted: #9397a8;
+    --border: #262835;
+    --accent: #8687ff;
+    --accent-2: #a78bfa;
+    --accent-soft: #1f1f3a;
+    --accent-contrast: #0d0e14;
+    --success: #4ade80;
+    --success-soft: #0f2a1a;
+    --warn-soft: #2a1d10;
+    --warn-text: #fbbf8c;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,.3);
+    --shadow-md: 0 8px 24px rgba(0,0,0,.35);
+    --shadow-lg: 0 20px 48px rgba(0,0,0,.5);
+  }
+
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family:var(--font-sans);
+    line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+    transition:background .25s ease, color .25s ease;
+  }
+  img,svg{display:block;}
+  a{color:inherit;}
+  .container{max-width:var(--maxw); margin:0 auto; padding:0 24px;}
+  section{padding:96px 0;}
+  @media (max-width: 720px){ section{padding:64px 0;} }
+
+  h1,h2,h3,h4{margin:0; font-weight:700; letter-spacing:-0.02em;}
+  .eyebrow{
+    display:inline-flex; align-items:center; gap:8px;
+    font-size:13px; font-weight:600; letter-spacing:.08em; text-transform:uppercase;
+    color:var(--accent); margin-bottom:14px;
+  }
+  .eyebrow::before{content:""; width:8px; height:8px; border-radius:50%; background:var(--accent);}
+  .section-head{max-width:640px; margin-bottom:56px;}
+  .section-head h2{font-size:clamp(28px,4vw,38px);}
+  .section-head p{color:var(--text-muted); font-size:17px; margin-top:12px;}
+
+  /* ---------- NAV ---------- */
+  .nav{
+    position:sticky; top:0; z-index:100;
+    backdrop-filter:saturate(180%) blur(14px);
+    background:color-mix(in srgb, var(--bg) 78%, transparent);
+    border-bottom:1px solid var(--border);
+  }
+  .nav-inner{
+    max-width:var(--maxw); margin:0 auto; padding:14px 24px;
+    display:flex; align-items:center; justify-content:space-between;
+  }
+  .brand{display:flex; align-items:center; gap:10px; font-weight:800; font-size:18px;}
+  .brand-mark{
+    width:32px; height:32px; border-radius:9px;
+    background:linear-gradient(135deg, var(--accent), var(--accent-2));
+    display:flex; align-items:center; justify-content:center;
+    color:#fff; box-shadow:var(--shadow-sm);
+  }
+  .nav-links{display:flex; align-items:center; gap:28px; list-style:none; margin:0; padding:0;}
+  .nav-links a{
+    font-size:14.5px; font-weight:600; color:var(--text-muted); text-decoration:none;
+    transition:color .15s ease;
+  }
+  .nav-links a:hover{color:var(--text);}
+  .nav-right{display:flex; align-items:center; gap:14px;}
+  .icon-btn{
+    width:38px; height:38px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    background:var(--surface-2); border:1px solid var(--border); color:var(--text);
+    cursor:pointer; transition:transform .15s ease, background .15s ease;
+  }
+  .icon-btn:hover{transform:translateY(-1px); background:var(--accent-soft);}
+  .nav-toggle{display:none; background:none; border:none; color:var(--text); cursor:pointer;}
+  @media (max-width: 760px){
+    .nav-links{display:none;}
+  }
+
+  /* ---------- BUTTONS ---------- */
+  .btn{
+    display:inline-flex; align-items:center; gap:8px;
+    font-family:inherit; font-size:15px; font-weight:600;
+    padding:13px 22px; border-radius:999px; border:1px solid transparent;
+    cursor:pointer; text-decoration:none; transition:transform .15s ease, box-shadow .15s ease, background .15s ease;
+    white-space:nowrap;
+  }
+  .btn:active{transform:scale(.97);}
+  .btn-primary{
+    background:linear-gradient(135deg, var(--accent), var(--accent-2));
+    color:#fff; box-shadow:0 8px 20px -6px color-mix(in srgb, var(--accent) 70%, transparent);
+  }
+  .btn-primary:hover{box-shadow:0 10px 26px -6px color-mix(in srgb, var(--accent) 80%, transparent);}
+  .btn-ghost{
+    background:var(--surface); color:var(--text); border-color:var(--border);
+  }
+  .btn-ghost:hover{background:var(--surface-2);}
+  .btn:disabled{opacity:.4; cursor:not-allowed; transform:none; box-shadow:none;}
+  .btn-sm{padding:9px 16px; font-size:13.5px; border-radius:10px;}
+
+  /* ---------- HERO ---------- */
+  .hero{
+    position:relative; overflow:hidden;
+    padding:120px 0 90px;
+  }
+  .hero-bg{
+    position:absolute; inset:0; z-index:0; overflow:hidden; pointer-events:none;
+  }
+  .blob{
+    position:absolute; border-radius:50%; filter:blur(60px); opacity:.35;
+  }
+  .blob-1{ width:480px; height:480px; top:-180px; right:-120px; background:var(--accent); animation:float1 16s ease-in-out infinite;}
+  .blob-2{ width:420px; height:420px; bottom:-200px; left:-140px; background:var(--accent-2); animation:float2 20s ease-in-out infinite;}
+  @keyframes float1{ 0%,100%{transform:translate(0,0);} 50%{transform:translate(-40px,30px);} }
+  @keyframes float2{ 0%,100%{transform:translate(0,0);} 50%{transform:translate(30px,-40px);} }
+
+  .hero-inner{position:relative; z-index:1; max-width:760px;}
+  .hero h1{font-size:clamp(38px,6vw,58px); line-height:1.08;}
+  .hero h1 small{display:block; font-size:.42em; font-weight:600; color:var(--text-muted); letter-spacing:.12em; margin-bottom:10px; text-transform:uppercase; font-family:var(--font-mono);}
+  .hero p{font-size:18px; color:var(--text-muted); margin-top:22px; max-width:620px;}
+  .hero-actions{display:flex; gap:14px; margin-top:34px; flex-wrap:wrap;}
+
+  .hero-matrix{
+    position:relative; z-index:1; margin-top:64px;
+    display:grid; grid-template-columns:repeat(8,1fr); gap:6px; max-width:420px;
+  }
+  .hero-matrix .cell{
+    aspect-ratio:1; border-radius:6px; background:var(--surface);
+    border:1px solid var(--border); font-family:var(--font-mono); font-size:10px;
+    display:flex; align-items:center; justify-content:center; color:var(--text-muted);
+    animation:pulseFade 4s ease-in-out infinite;
+  }
+  @keyframes pulseFade{ 0%,100%{opacity:.5;} 50%{opacity:1; background:var(--accent-soft); color:var(--accent);} }
+
+  /* ---------- STAT / OVERVIEW ---------- */
+  .stat-grid{
+    display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:40px;
+  }
+  @media (max-width:860px){ .stat-grid{grid-template-columns:repeat(2,1fr);} }
+  .stat-card{
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-md);
+    padding:24px 20px; box-shadow:var(--shadow-sm);
+  }
+  .stat-card .label{font-size:13px; color:var(--text-muted); font-weight:600; text-transform:uppercase; letter-spacing:.04em;}
+  .stat-card .value{font-size:26px; font-weight:800; margin-top:8px; font-family:var(--font-mono); color:var(--accent);}
+  .stat-card .sub{font-size:13px; color:var(--text-muted); margin-top:4px;}
+
+  .info-grid{display:grid; grid-template-columns:1fr 1fr; gap:20px;}
+  @media (max-width:760px){ .info-grid{grid-template-columns:1fr;} }
+  .info-card{
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-md);
+    padding:28px; box-shadow:var(--shadow-sm);
+  }
+  .info-card h3{font-size:18px; margin-bottom:10px;}
+  .info-card p{color:var(--text-muted); font-size:15px; margin:0;}
+
+  /* ---------- STEP CARDS ---------- */
+  .step-grid{display:grid; grid-template-columns:repeat(4,1fr); gap:16px;}
+  @media (max-width:980px){ .step-grid{grid-template-columns:repeat(2,1fr);} }
+  @media (max-width:560px){ .step-grid{grid-template-columns:1fr;} }
+  .step-card{
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-md);
+    padding:26px 22px; box-shadow:var(--shadow-sm); position:relative; overflow:hidden;
+    transition:transform .2s ease, box-shadow .2s ease;
+  }
+  .step-card:hover{transform:translateY(-4px); box-shadow:var(--shadow-md);}
+  .step-num{
+    font-family:var(--font-mono); font-size:13px; font-weight:700; color:var(--accent);
+    background:var(--accent-soft); display:inline-block; padding:3px 10px; border-radius:999px; margin-bottom:14px;
+  }
+  .step-card h3{font-size:17px; margin-bottom:8px; font-family:var(--font-mono);}
+  .step-card p{font-size:14px; color:var(--text-muted); margin:0;}
+  .step-card .mini-ico{position:absolute; top:18px; right:18px; opacity:.5;}
+
+  /* ---------- DEMO ---------- */
+  .demo-shell{
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg);
+    box-shadow:var(--shadow-lg); overflow:hidden;
+  }
+  .demo-inputs{
+    display:grid; grid-template-columns:1fr 1fr auto; gap:20px; align-items:end;
+    padding:28px; border-bottom:1px solid var(--border); background:var(--surface-2);
+  }
+  @media (max-width:860px){ .demo-inputs{grid-template-columns:1fr; } }
+  .field label{display:block; font-size:13px; font-weight:600; color:var(--text-muted); margin-bottom:8px;}
+  .field input{
+    width:100%; font-family:var(--font-mono); font-size:15px; padding:12px 14px;
+    border-radius:var(--radius-sm); border:1px solid var(--border); background:var(--surface); color:var(--text);
+    outline:none; transition:border-color .15s ease;
+  }
+  .field input:focus{border-color:var(--accent);}
+  .field .hexline{font-family:var(--font-mono); font-size:12px; color:var(--text-muted); margin-top:6px; word-break:break-all;}
+  .demo-input-actions{display:flex; gap:10px;}
+
+  .demo-body{padding:32px;}
+  .step-header{display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; margin-bottom:22px;}
+  .step-title-wrap{display:flex; align-items:center; gap:12px; flex-wrap:wrap;}
+  .round-badge{
+    font-family:var(--font-mono); font-size:12.5px; font-weight:700; padding:5px 12px; border-radius:999px;
+    background:var(--accent-soft); color:var(--accent);
+  }
+  .step-title{font-size:21px; font-weight:700;}
+  .step-desc{color:var(--text-muted); font-size:15px; margin-top:4px; max-width:640px;}
+  .step-progress{font-family:var(--font-mono); font-size:13px; color:var(--text-muted); white-space:nowrap;}
+
+  .progress-track{height:6px; border-radius:999px; background:var(--surface-2); overflow:hidden; margin-bottom:32px;}
+  .progress-fill{height:100%; background:linear-gradient(90deg,var(--accent),var(--accent-2)); width:0%; transition:width .25s ease;}
+
+  .viz-row{
+    display:flex; align-items:center; justify-content:center; gap:28px; flex-wrap:wrap; margin-bottom:28px;
+  }
+  .viz-block{display:flex; flex-direction:column; align-items:center; gap:10px;}
+  .viz-label{font-size:12.5px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:.05em;}
+  .op-symbol{
+    font-family:var(--font-mono); font-size:26px; font-weight:700; color:var(--accent);
+    display:flex; flex-direction:column; align-items:center; gap:6px;
+  }
+  .op-symbol .op-tag{font-size:11px; font-weight:700; color:var(--text-muted); letter-spacing:.04em; text-transform:uppercase;}
+
+  .matrix{
+    display:grid; grid-template-columns:repeat(4,1fr); gap:6px;
+    width:200px;
+  }
+  .matrix.small{width:150px;}
+  .matrix .cell{
+    aspect-ratio:1; border-radius:8px; background:var(--surface-2); border:1px solid var(--border);
+    display:flex; align-items:center; justify-content:center;
+    font-family:var(--font-mono); font-size:14px; font-weight:600; color:var(--text);
+    transition:background .3s ease, color .3s ease, transform .3s ease;
+  }
+  .matrix.small .cell{font-size:12px;}
+  .matrix .cell.changed{
+    background:var(--accent); color:#fff; border-color:var(--accent);
+    animation:popCell .5s ease;
+  }
+  .matrix .cell.keycell{ background:var(--warn-soft); color:var(--warn-text); border-color:transparent; }
+  @keyframes popCell{ 0%{transform:scale(1.18);} 100%{transform:scale(1);} }
+
+  .controls{
+    display:flex; align-items:center; justify-content:center; gap:10px; flex-wrap:wrap;
+    padding-top:24px; border-top:1px solid var(--border);
+  }
+  .controls .btn{min-width:44px; justify-content:center;}
+
+  .result-panel{
+    margin-top:28px; border-radius:var(--radius-md); padding:22px 24px;
+    background:var(--success-soft); border:1px solid color-mix(in srgb, var(--success) 35%, transparent);
+    display:none; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;
+  }
+  .result-panel.show{display:flex;}
+  .result-panel .rlabel{font-size:13px; font-weight:700; color:var(--success); text-transform:uppercase; letter-spacing:.05em;}
+  .result-panel .rvalue{font-family:var(--font-mono); font-size:16px; font-weight:700; margin-top:4px; word-break:break-all;}
+
+  /* ---------- ROUNDS DIAGRAM ---------- */
+  .flow{display:flex; flex-direction:column; align-items:center; gap:0;}
+  .flow-node{
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-md);
+    padding:16px 24px; font-weight:600; font-size:14.5px; box-shadow:var(--shadow-sm);
+    text-align:center; max-width:460px;
+  }
+  .flow-node.accent{border-color:var(--accent); background:var(--accent-soft); color:var(--accent);}
+  .flow-connector{width:2px; height:28px; background:var(--border);}
+  .flow-group{
+    border:1.5px dashed var(--border); border-radius:var(--radius-md); padding:22px 26px 26px;
+    display:flex; flex-direction:column; align-items:center; gap:0; position:relative; margin:8px 0;
+  }
+  .flow-group-tag{
+    position:absolute; top:-13px; background:var(--bg); padding:0 10px; font-size:12.5px;
+    font-weight:700; color:var(--text-muted); font-family:var(--font-mono);
+  }
+
+  /* ---------- FOOTER ---------- */
+  footer{border-top:1px solid var(--border); padding:48px 0; }
+  .footer-inner{display:flex; justify-content:space-between; align-items:flex-start; gap:24px; flex-wrap:wrap;}
+  .footer-note{max-width:640px; color:var(--text-muted); font-size:13.5px; display:flex; gap:10px; align-items:flex-start;}
+  .footer-meta{font-size:13px; color:var(--text-muted); text-align:right;}
+  @media (max-width:640px){ .footer-inner{flex-direction:column;} .footer-meta{text-align:left;} }
+
+  .reveal{opacity:0; transform:translateY(18px); transition:opacity .6s ease, transform .6s ease;}
+  .reveal.visible{opacity:1; transform:translateY(0);}
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-inner">
+    <div class="brand">
+      <span class="brand-mark">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M6 11V7a6 6 0 1112 0v4" stroke="white" stroke-width="2" stroke-linecap="round"/><rect x="4" y="11" width="16" height="10" rx="2" fill="white"/></svg>
+      </span>
+      AES
+    </div>
+    <ul class="nav-links">
+      <li><a href="#overview">算法概述</a></li>
+      <li><a href="#steps">核心步骤</a></li>
+      <li><a href="#demo">交互演示</a></li>
+      <li><a href="#rounds">轮结构</a></li>
+    </ul>
+    <div class="nav-right">
+      <button class="icon-btn" id="themeToggle" aria-label="切换主题" title="切换明暗主题">
+        <svg id="iconSun" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+  </div>
+</nav>
+
+<main>
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero-bg"><div class="blob blob-1"></div><div class="blob blob-2"></div></div>
+    <div class="container">
+      <div class="hero-inner">
+        <h1><small>Advanced Encryption Standard · FIPS-197</small>高级加密标准 AES</h1>
+        <p>AES 是由 Joan Daemen 与 Vincent Rijmen 设计的对称分组密码算法 Rijndael 的子集，2001 年被 NIST 确立为联邦信息处理标准。它以 128 位数据块为单位，支持 128 / 192 / 256 位密钥，广泛应用于 TLS、Wi-Fi、磁盘加密等现代安全基础设施。</p>
+        <div class="hero-actions">
+          <a href="#demo" class="btn btn-primary">查看交互演示 →</a>
+          <a href="#overview" class="btn btn-ghost">了解算法原理</a>
+        </div>
+      </div>
+      <div class="hero-matrix" id="heroMatrix" aria-hidden="true"></div>
+    </div>
+  </section>
+
+  <!-- OVERVIEW -->
+  <section id="overview">
+    <div class="container">
+      <div class="section-head reveal">
+        <div class="eyebrow">Overview</div>
+        <h2>算法概述</h2>
+        <p>一个基于替换-置换网络（SPN）结构的迭代型对称分组密码。</p>
+      </div>
+
+      <div class="stat-grid reveal">
+        <div class="stat-card">
+          <div class="label">分组长度</div>
+          <div class="value">128 bits</div>
+          <div class="sub">固定 16 字节 / 4×4 状态矩阵</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">密钥长度</div>
+          <div class="value">128/192/256</div>
+          <div class="sub">对应 AES-128 / 192 / 256</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">轮数</div>
+          <div class="value">10/12/14</div>
+          <div class="sub">随密钥长度增加而增加</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">结构</div>
+          <div class="value">SPN</div>
+          <div class="sub">替换-置换网络</div>
+        </div>
+      </div>
+
+      <div class="info-grid reveal">
+        <div class="info-card">
+          <h3>设计历史</h3>
+          <p>1997 年，NIST 发起 AES 征集计划以替代老旧的 DES。经过多轮公开密码学评审与竞争，比利时团队提交的 Rijndael 算法凭借安全性、效率与实现灵活性胜出，并于 2001 年正式成为标准 FIPS-197。</p>
+        </div>
+        <div class="info-card">
+          <h3>应用场景</h3>
+          <p>从 HTTPS 网页加密、VPN 隧道，到 Wi-Fi 安全协议（WPA2/WPA3）、磁盘与文件加密（BitLocker、FileVault），AES 已成为现代信息安全基础设施中最核心的对称加密算法。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- STEPS -->
+  <section id="steps">
+    <div class="container">
+      <div class="section-head reveal">
+        <div class="eyebrow">Core Transformations</div>
+        <h2>核心变换步骤</h2>
+        <p>除最后一轮外，每一轮由四个关键变换构成，交替提供混淆与扩散特性。</p>
+      </div>
+      <div class="step-grid reveal">
+        <div class="step-card">
+          <span class="step-num">01</span>
+          <h3>SubBytes</h3>
+          <p>利用固定的 S 盒对状态矩阵中每个字节进行非线性替换，提供混淆（confusion）特性，抵御线性与差分密码分析。</p>
+        </div>
+        <div class="step-card">
+          <span class="step-num">02</span>
+          <h3>ShiftRows</h3>
+          <p>将状态矩阵第 r 行循环左移 r 个字节（r = 0,1,2,3），在字节间引入扩散（diffusion），打乱列内数据分布。</p>
+        </div>
+        <div class="step-card">
+          <span class="step-num">03</span>
+          <h3>MixColumns</h3>
+          <p>将每一列视为 GF(2⁸) 域上的多项式，与固定矩阵相乘，使单字节的改变扩散到整列四个字节。</p>
+        </div>
+        <div class="step-card">
+          <span class="step-num">04</span>
+          <h3>AddRoundKey</h3>
+          <p>将当前状态与该轮生成的轮密钥按位异或（XOR），是唯一引入密钥信息的步骤。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- DEMO -->
+  <section id="demo">
+    <div class="container">
+      <div class="section-head reveal">
+        <div class="eyebrow">Interactive Demo</div>
+        <h2>交互式加密演示</h2>
+        <p>输入 16 字符的明文与密钥，逐步观察 AES-128 对该数据块的完整加密过程 — 全部计算均在本地浏览器完成。</p>
+      </div>
+
+      <div class="demo-shell reveal">
+        <div class="demo-inputs">
+          <div class="field">
+            <label for="plainInput">明文 Plaintext（16 字符）</label>
+            <input id="plainInput" type="text" maxlength="16" value="HELLO AES DEMO!" autocomplete="off">
+            <div class="hexline" id="plainHex"></div>
+          </div>
+          <div class="field">
+            <label for="keyInput">密钥 Key（16 字符）</label>
+            <input id="keyInput" type="text" maxlength="16" value="SECRETKEY123456" autocomplete="off">
+            <div class="hexline" id="keyHex"></div>
+          </div>
+          <div class="demo-input-actions">
+            <button class="btn btn-ghost" id="randomBtn" title="随机生成明文与密钥">🎲 随机</button>
+            <button class="btn btn-primary" id="runBtn">开始加密 →</button>
+          </div>
+        </div>
+
+        <div class="demo-body">
+          <div class="step-header">
+            <div class="step-title-wrap">
+              <span class="round-badge" id="roundBadge">准备就绪</span>
+              <div>
+                <div class="step-title" id="stepTitle">点击“开始加密”启动演示</div>
+                <div class="step-desc" id="stepDesc">将按照 AES-128 的 10 轮运算，逐步展示状态矩阵的每一次变化。</div>
+              </div>
+            </div>
+            <div class="step-progress" id="stepProgress">—</div>
+          </div>
+
+          <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+
+          <div class="viz-row" id="vizRow">
+            <div class="viz-block">
+              <div class="viz-label">变换前 Before</div>
+              <div class="matrix" id="matrixBefore"></div>
+            </div>
+            <div class="op-symbol" id="opSymbol">
+              <span id="opChar">→</span>
+              <span class="op-tag" id="opTag"></span>
+            </div>
+            <div class="viz-block" id="roundKeyBlock" style="display:none;">
+              <div class="viz-label">轮密钥 Round Key</div>
+              <div class="matrix small" id="matrixKey"></div>
+            </div>
+            <div class="viz-block">
+              <div class="viz-label">变换后 After</div>
+              <div class="matrix" id="matrixAfter"></div>
+            </div>
+          </div>
+
+          <div class="controls">
+            <button class="btn btn-ghost" id="resetBtn" disabled title="重置到初始状态">⏮</button>
+            <button class="btn btn-ghost" id="prevBtn" disabled title="上一步">◀ 上一步</button>
+            <button class="btn btn-primary" id="playBtn" disabled title="自动播放">▶ 自动播放</button>
+            <button class="btn btn-ghost" id="nextBtn" disabled title="下一步">下一步 ▶</button>
+          </div>
+
+          <div class="result-panel" id="resultPanel">
+            <div>
+              <div class="rlabel">✅ 加密完成 · Ciphertext</div>
+              <div class="rvalue" id="cipherValue">—</div>
+            </div>
+            <button class="btn btn-sm btn-ghost" id="copyBtn">复制密文</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ROUNDS -->
+  <section id="rounds">
+    <div class="container">
+      <div class="section-head reveal">
+        <div class="eyebrow">Round Structure</div>
+        <h2>轮结构总览</h2>
+        <p>AES-128 共进行 10 轮运算，初始轮与最后一轮略有不同。</p>
+      </div>
+
+      <div class="flow reveal">
+        <div class="flow-node accent">明文输入 Plaintext（16 字节）</div>
+        <div class="flow-connector"></div>
+        <div class="flow-node">初始 AddRoundKey</div>
+        <div class="flow-connector"></div>
+
+        <div class="flow-group">
+          <span class="flow-group-tag">第 1 — 9 轮 · ×9</span>
+          <div class="flow-node">SubBytes</div>
+          <div class="flow-connector"></div>
+          <div class="flow-node">ShiftRows</div>
+          <div class="flow-connector"></div>
+          <div class="flow-node">MixColumns</div>
+          <div class="flow-connector"></div>
+          <div class="flow-node">AddRoundKey</div>
+        </div>
+
+        <div class="flow-connector"></div>
+
+        <div class="flow-group">
+          <span class="flow-group-tag">第 10 轮（最终轮，无 MixColumns）</span>
+          <div class="flow-node">SubBytes</div>
+          <div class="flow-connector"></div>
+          <div class="flow-node">ShiftRows</div>
+          <div class="flow-connector"></div>
+          <div class="flow-node">AddRoundKey</div>
+        </div>
+
+        <div class="flow-connector"></div>
+        <div class="flow-node accent">密文输出 Ciphertext（16 字节）</div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="container footer-inner">
+    <div class="footer-note">
+      <span>⚠️</span>
+      <span>本页面仅用于 AES 算法原理教学与可视化演示，所有运算均在浏览器本地完成、不会上传任何数据；请勿将示例代码直接用于生产环境的密钥管理与安全系统。参考标准：NIST FIPS-197。</span>
+    </div>
+    <div class="footer-meta">AES Visualizer<br>Vanilla HTML / CSS / JS</div>
+  </div>
+</footer>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ============ THEME ============ */
+  var root = document.documentElement;
+  var themeBtn = document.getElementById('themeToggle');
+  var saved = localStorage.getItem('aes-theme');
+  var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  if(saved === 'dark' || (!saved && prefersDark)) root.setAttribute('data-theme','dark');
+  themeBtn.addEventListener('click', function(){
+    var isDark = root.getAttribute('data-theme') === 'dark';
+    if(isDark){ root.removeAttribute('data-theme'); localStorage.setItem('aes-theme','light'); }
+    else{ root.setAttribute('data-theme','dark'); localStorage.setItem('aes-theme','dark'); }
+  });
+
+  /* ============ REVEAL ON SCROLL ============ */
+  var revealEls = document.querySelectorAll('.reveal');
+  var io = new IntersectionObserver(function(entries){
+    entries.forEach(function(e){ if(e.isIntersecting){ e.target.classList.add('visible'); io.unobserve(e.target); } });
+  }, {threshold:.12});
+  revealEls.forEach(function(el){ io.observe(el); });
+
+  /* ============ HERO DECORATIVE MATRIX ============ */
+  var heroMatrix = document.getElementById('heroMatrix');
+  for(var i=0;i<32;i++){
+    var c = document.createElement('div');
+    c.className = 'cell';
+    c.style.animationDelay = (Math.random()*4).toFixed(2)+'s';
+    c.textContent = Math.floor(Math.random()*256).toString(16).padStart(2,'0').toUpperCase();
+    heroMatrix.appendChild(c);
+  }
+
+  /* =========================================================
+     AES-128 IMPLEMENTATION (educational, encryption only)
+     ========================================================= */
+  var SBOX = [
+    0x63,0x7c,0x77,0x7b,0xf2,0x6b,0x6f,0xc5,0x30,0x01,0x67,0x2b,0xfe,0xd7,0xab,0x76,
+    0xca,0x82,0xc9,0x7d,0xfa,0x59,0x47,0xf0,0xad,0xd4,0xa2,0xaf,0x9c,0xa4,0x72,0xc0,
+    0xb7,0xfd,0x93,0x26,0x36,0x3f,0xf7,0xcc,0x34,0xa5,0xe5,0xf1,0x71,0xd8,0x31,0x15,
+    0x04,0xc7,0x23,0xc3,0x18,0x96,0x05,0x9a,0x07,0x12,0x80,0xe2,0xeb,0x27,0xb2,0x75,
+    0x09,0x83,0x2c,0x1a,0x1b,0x6e,0x5a,0xa0,0x52,0x3b,0xd6,0xb3,0x29,0xe3,0x2f,0x84,
+    0x53,0xd1,0x00,0xed,0x20,0xfc,0xb1,0x5b,0x6a,0xcb,0xbe,0x39,0x4a,0x4c,0x58,0xcf,
+    0xd0,0xef,0xaa,0xfb,0x43,0x4d,0x33,0x85,0x45,0xf9,0x02,0x7f,0x50,0x3c,0x9f,0xa8,
+    0x51,0xa3,0x40,0x8f,0x92,0x9d,0x38,0xf5,0xbc,0xb6,0xda,0x21,0x10,0xff,0xf3,0xd2,
+    0xcd,0x0c,0x13,0xec,0x5f,0x97,0x44,0x17,0xc4,0xa7,0x7e,0x3d,0x64,0x5d,0x19,0x73,
+    0x60,0x81,0x4f,0xdc,0x22,0x2a,0x90,0x88,0x46,0xee,0xb8,0x14,0xde,0x5e,0x0b,0xdb,
+    0xe0,0x32,0x3a,0x0a,0x49,0x06,0x24,0x5c,0xc2,0xd3,0xac,0x62,0x91,0x95,0xe4,0x79,
+    0xe7,0xc8,0x37,0x6d,0x8d,0xd5,0x4e,0xa9,0x6c,0x56,0xf4,0xea,0x65,0x7a,0xae,0x08,
+    0xba,0x78,0x25,0x2e,0x1c,0xa6,0xb4,0xc6,0xe8,0xdd,0x74,0x1f,0x4b,0xbd,0x8b,0x8a,
+    0x70,0x3e,0xb5,0x66,0x48,0x03,0xf6,0x0e,0x61,0x35,0x57,0xb9,0x86,0xc1,0x1d,0x9e,
+    0xe1,0xf8,0x98,0x11,0x69,0xd9,0x8e,0x94,0x9b,0x1e,0x87,0xe9,0xce,0x55,0x28,0xdf,
+    0x8c,0xa1,0x89,0x0d,0xbf,0xe6,0x42,0x68,0x41,0x99,0x2d,0x0f,0xb0,0x54,0xbb,0x16
+  ];
+  var RCON = [0x00,0x01,0x02,0x04,0x08,0x10,0x20,0x40,0x80,0x1b,0x36];
+
+  function gmul(a,b){
+    var p = 0;
+    for(var i=0;i<8;i++){
+      if(b & 1) p ^= a;
+      var hi = a & 0x80;
+      a = (a << 1) & 0xFF;
+      if(hi) a ^= 0x1B;
+      b >>= 1;
+    }
+    return p;
+  }
+
+  function subWord(w){ return [SBOX[w[0]],SBOX[w[1]],SBOX[w[2]],SBOX[w[3]]]; }
+  function rotWord(w){ return [w[1],w[2],w[3],w[0]]; }
+  function xorWord(a,b){ return [a[0]^b[0],a[1]^b[1],a[2]^b[2],a[3]^b[3]]; }
+
+  function keyExpansion(key){
+    var w = [];
+    for(var i=0;i<4;i++) w.push([key[4*i],key[4*i+1],key[4*i+2],key[4*i+3]]);
+    for(var i=4;i<44;i++){
+      var temp = w[i-1].slice();
+      if(i % 4 === 0){
+        temp = xorWord(subWord(rotWord(temp)), [RCON[i/4],0,0,0]);
+      }
+      w.push(xorWord(w[i-4], temp));
+    }
+    var roundKeys = [];
+    for(var r=0;r<=10;r++){
+      var rk = new Array(16);
+      for(var col=0;col<4;col++){
+        var word = w[4*r+col];
+        for(var row=0;row<4;row++) rk[row+4*col] = word[row];
+      }
+      roundKeys.push(rk);
+    }
+    return roundKeys;
+  }
+
+  function subBytes(s){ return s.map(function(b){ return SBOX[b]; }); }
+
+  function shiftRows(s){
+    var n = new Array(16);
+    for(var row=0;row<4;row++){
+      for(var col=0;col<4;col++){
+        n[row+4*col] = s[row + 4*((col+row)%4)];
+      }
+    }
+    return n;
+  }
+
+  function mixColumns(s){
+    var n = new Array(16);
+    for(var c=0;c<4;c++){
+      var s0=s[4*c], s1=s[1+4*c], s2=s[2+4*c], s3=s[3+4*c];
+      n[4*c]   = gmul(s0,2)^gmul(s1,3)^s2^s3;
+      n[1+4*c] = s0^gmul(s1,2)^gmul(s2,3)^s3;
+      n[2+4*c] = s0^s1^gmul(s2,2)^gmul(s3,3);
+      n[3+4*c] = gmul(s0,3)^s1^s2^gmul(s3,2);
+    }
+    return n;
+  }
+
+  function addRoundKey(s, rk){ return s.map(function(b,i){ return b ^ rk[i]; }); }
+
+  function aesEncryptWithLog(plainBytes, keyBytes){
+    var roundKeys = keyExpansion(keyBytes);
+    var log = [];
+    var state = plainBytes.slice();
+
+    log.push({round:null, title:'初始状态', desc:'明文按列顺序填入 4×4 状态矩阵（第 r 行第 c 列 = 第 4c+r 字节）。', type:'input', state:state.slice()});
+
+    state = addRoundKey(state, roundKeys[0]);
+    log.push({round:0, title:'初始 AddRoundKey', desc:'状态矩阵与原始密钥（轮密钥 0）按位异或。', type:'addkey', roundKey: roundKeys[0].slice(), state:state.slice()});
+
+    for(var round=1; round<=9; round++){
+      state = subBytes(state);
+      log.push({round:round, title:'SubBytes 字节替换', desc:'查表 S 盒，对每个字节做非线性替换，提供混淆特性。', type:'sub', state:state.slice()});
+
+      state = shiftRows(state);
+      log.push({round:round, title:'ShiftRows 行移位', desc:'第 r 行循环左移 r 个字节，打乱列内字节分布，提供扩散特性。', type:'shift', state:state.slice()});
+
+      state = mixColumns(state);
+      log.push({round:round, title:'MixColumns 列混合', desc:'每列在 GF(2⁸) 域上与固定矩阵相乘，使单字节变化扩散到整列。', type:'mix', state:state.slice()});
+
+      state = addRoundKey(state, roundKeys[round]);
+      log.push({round:round, title:'AddRoundKey 轮密钥加', desc:'状态矩阵与第 '+round+' 轮密钥按位异或。', type:'addkey', roundKey: roundKeys[round].slice(), state:state.slice()});
+    }
+
+    state = subBytes(state);
+    log.push({round:10, title:'SubBytes 字节替换', desc:'最终轮：查表 S 盒进行非线性字节替换。', type:'sub', state:state.slice()});
+
+    state = shiftRows(state);
+    log.push({round:10, title:'ShiftRows 行移位', desc:'最终轮：第 r 行循环左移 r 个字节（最终轮不执行 MixColumns）。', type:'shift', state:state.slice()});
+
+    state = addRoundKey(state, roundKeys[10]);
+    log.push({round:10, title:'AddRoundKey 轮密钥加（最终）', desc:'与第 10 轮密钥异或，得到最终密文。', type:'addkey', roundKey: roundKeys[10].slice(), state:state.slice(), final:true});
+
+    return {log: log, ciphertext: state};
+  }
+
+  /* ============ TEXT <-> BYTES ============ */
+  function textToBytes16(text){
+    var bytes = new Array(16).fill(0x20);
+    for(var i=0;i<16 && i<text.length;i++) bytes[i] = text.charCodeAt(i) & 0xFF;
+    return bytes;
+  }
+  function bytesToHex(bytes){
+    return bytes.map(function(b){ return b.toString(16).toUpperCase().padStart(2,'0'); }).join(' ');
+  }
+  function bytesToHexCompact(bytes){
+    return bytes.map(function(b){ return b.toString(16).toUpperCase().padStart(2,'0'); }).join('');
+  }
+
+  /* ============ DEMO UI WIRING ============ */
+  var plainInput = document.getElementById('plainInput');
+  var keyInput = document.getElementById('keyInput');
+  var plainHex = document.getElementById('plainHex');
+  var keyHex = document.getElementById('keyHex');
+  var runBtn = document.getElementById('runBtn');
+  var randomBtn = document.getElementById('randomBtn');
+
+  var roundBadge = document.getElementById('roundBadge');
+  var stepTitle = document.getElementById('stepTitle');
+  var stepDesc = document.getElementById('stepDesc');
+  var stepProgress = document.getElementById('stepProgress');
+  var progressFill = document.getElementById('progressFill');
+
+  var matrixBefore = document.getElementById('matrixBefore');
+  var matrixAfter = document.getElementById('matrixAfter');
+  var matrixKey = document.getElementById('matrixKey');
+  var roundKeyBlock = document.getElementById('roundKeyBlock');
+  var opChar = document.getElementById('opChar');
+  var opTag = document.getElementById('opTag');
+
+  var resetBtn = document.getElementById('resetBtn');
+  var prevBtn = document.getElementById('prevBtn');
+  var nextBtn = document.getElementById('nextBtn');
+  var playBtn = document.getElementById('playBtn');
+  var resultPanel = document.getElementById('resultPanel');
+  var cipherValue = document.getElementById('cipherValue');
+  var copyBtn = document.getElementById('copyBtn');
+
+  var currentLog = null;
+  var currentIndex = -1;
+  var playTimer = null;
+
+  function updateHexPreview(){
+    plainHex.textContent = bytesToHex(textToBytes16(plainInput.value));
+    keyHex.textContent = bytesToHex(textToBytes16(keyInput.value));
+  }
+  plainInput.addEventListener('input', updateHexPreview);
+  keyInput.addEventListener('input', updateHexPreview);
+  updateHexPreview();
+
+  function buildMatrixCells(container, bytes, prevBytes, keyMode){
+    container.innerHTML = '';
+    for(var row=0;row<4;row++){
+      for(var col=0;col<4;col++){
+        var idx = row + 4*col;
+        var cell = document.createElement('div');
+        cell.className = 'cell' + (keyMode ? ' keycell' : '');
+        cell.textContent = bytes[idx].toString(16).toUpperCase().padStart(2,'0');
+        if(prevBytes && prevBytes[idx] !== bytes[idx]){
+          cell.classList.add('changed');
+        }
+        container.appendChild(cell);
+      }
+    }
+  }
+
+  var OP_MAP = {
+    input: {char:'■', tag:'LOAD'},
+    sub:   {char:'S', tag:'SubBytes'},
+    shift: {char:'⇄', tag:'ShiftRows'},
+    mix:   {char:'⊗', tag:'MixColumns'},
+    addkey:{char:'⊕', tag:'AddRoundKey'}
+  };
+
+  function render(){
+    if(!currentLog || currentIndex < 0) return;
+    var step = currentLog[currentIndex];
+    var prevState = currentIndex > 0 ? currentLog[currentIndex-1].state : step.state;
+
+    roundBadge.textContent = step.round === null ? '初始加载' : ('第 ' + step.round + ' 轮' + (step.round === 0 ? '（初始）' : (step.final ? '（最终）' : '')));
+    stepTitle.textContent = step.title;
+    stepDesc.textContent = step.desc;
+    stepProgress.textContent = '步骤 ' + (currentIndex+1) + ' / ' + currentLog.length;
+    progressFill.style.width = (((currentIndex+1)/currentLog.length)*100).toFixed(1) + '%';
+
+    buildMatrixCells(matrixBefore, prevState, null, false);
+    buildMatrixCells(matrixAfter, step.state, prevState, false);
+
+    var op = OP_MAP[step.type] || OP_MAP.sub;
+    opChar.textContent = op.char;
+    opTag.textContent = op.tag;
+
+    if(step.type === 'addkey'){
+      roundKeyBlock.style.display = 'flex';
+      buildMatrixCells(matrixKey, step.roundKey, null, true);
+    } else {
+      roundKeyBlock.style.display = 'none';
+    }
+
+    prevBtn.disabled = currentIndex === 0;
+    nextBtn.disabled = currentIndex === currentLog.length - 1;
+
+    if(currentIndex === currentLog.length - 1){
+      resultPanel.classList.add('show');
+      cipherValue.textContent = bytesToHexCompact(step.state);
+      stopPlay();
+    } else {
+      resultPanel.classList.remove('show');
+    }
+  }
+
+  function goTo(index){
+    if(!currentLog) return;
+    currentIndex = Math.max(0, Math.min(currentLog.length-1, index));
+    render();
+  }
+
+  function stopPlay(){
+    if(playTimer){ clearInterval(playTimer); playTimer = null; }
+    playBtn.textContent = '▶ 自动播放';
+  }
+
+  function togglePlay(){
+    if(playTimer){ stopPlay(); return; }
+    playBtn.textContent = '⏸ 暂停';
+    playTimer = setInterval(function(){
+      if(currentIndex >= currentLog.length - 1){ stopPlay(); return; }
+      goTo(currentIndex+1);
+    }, 900);
+  }
+
+  function runDemo(){
+    stopPlay();
+    var plainBytes = textToBytes16(plainInput.value);
+    var keyBytes = textToBytes16(keyInput.value);
+    var result = aesEncryptWithLog(plainBytes, keyBytes);
+    currentLog = result.log;
+    currentIndex = 0;
+    resetBtn.disabled = false;
+    prevBtn.disabled = true;
+    nextBtn.disabled = false;
+    playBtn.disabled = false;
+    render();
+    document.getElementById('demo').scrollIntoView({behavior:'smooth', block:'nearest'});
+  }
+
+  runBtn.addEventListener('click', runDemo);
+  resetBtn.addEventListener('click', function(){ stopPlay(); goTo(0); });
+  prevBtn.addEventListener('click', function(){ stopPlay(); goTo(currentIndex-1); });
+  nextBtn.addEventListener('click', function(){ stopPlay(); goTo(currentIndex+1); });
+  playBtn.addEventListener('click', togglePlay);
+
+  copyBtn.addEventListener('click', function(){
+    var text = cipherValue.textContent;
+    if(navigator.clipboard){
+      navigator.clipboard.writeText(text).then(function(){
+        var orig = copyBtn.textContent;
+        copyBtn.textContent = '已复制 ✓';
+        setTimeout(function(){ copyBtn.textContent = orig; }, 1400);
+      });
+    }
+  });
+
+  var RAND_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
+  function randomString16(){
+    var out = '';
+    for(var i=0;i<16;i++) out += RAND_CHARS[Math.floor(Math.random()*RAND_CHARS.length)];
+    return out;
+  }
+  randomBtn.addEventListener('click', function(){
+    plainInput.value = randomString16();
+    keyInput.value = randomString16();
+    updateHexPreview();
+  });
+
+})();
+</script>
+</body>
+</html>
